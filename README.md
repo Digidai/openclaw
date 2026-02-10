@@ -499,3 +499,295 @@ On Windows, Git may check out shell scripts with CRLF line endings instead of LF
 - [OpenClaw Docs](https://docs.openclaw.ai/)
 - [Cloudflare Sandbox Docs](https://developers.cloudflare.com/sandbox/)
 - [Cloudflare Access Docs](https://developers.cloudflare.com/cloudflare-one/policies/access/)
+
+---
+
+# 中文部署指南
+
+本项目是 [OpenClaw](https://github.com/openclaw/openclaw) 个人 AI 助手的 Cloudflare 部署方案。此 fork 默认使用 [Kimi (Moonshot AI)](https://platform.moonshot.cn/) 作为 AI 提供商。
+
+## 项目简介
+
+OpenClaw 是一个带网关架构的个人 AI 助手，支持多平台接入。本项目将其打包运行在 [Cloudflare Sandbox](https://developers.cloudflare.com/sandbox/) 容器中，无需自建服务器，由 Cloudflare 全托管。
+
+**核心功能：**
+- Web 控制台 (Control UI) 直接对话
+- 多平台支持 (Telegram / Discord / Slack)
+- 设备配对认证，安全可控
+- 对话历史持久化 (通过 R2 存储)
+- 浏览器自动化 (截图、录屏)
+
+**架构流程：**
+
+```
+用户请求 → Cloudflare Worker → Sandbox 容器 → OpenClaw Gateway (端口 18789) → Kimi API
+```
+
+## 前置条件
+
+| 条件 | 说明 |
+|------|------|
+| Node.js >= 18 | [下载地址](https://nodejs.org/) |
+| Cloudflare 账号 | [注册地址](https://dash.cloudflare.com/sign-up) |
+| Workers Paid 计划 | $5/月，[升级地址](https://dash.cloudflare.com/?to=/:account/workers/plans) |
+| 开启 Containers 功能 | [Containers 控制台](https://dash.cloudflare.com/?to=/:account/workers/containers) |
+| Kimi API Key | [Moonshot 开放平台](https://platform.moonshot.cn/) 获取 |
+
+## 费用估算
+
+| 资源 | 月费用（24/7 运行） |
+|------|---------------------|
+| Workers Paid 计划 | $5 |
+| 内存 (4 GiB) | ~$26 |
+| CPU (~10% 利用率) | ~$2 |
+| 磁盘 (8 GB) | ~$1.50 |
+| **合计** | **~$34.50/月** |
+
+> 通过配置 `SANDBOX_SLEEP_AFTER=10m` 让容器空闲时休眠，每天只运行 4 小时的话，计算费用可降至 ~$5-6/月（加上 $5 计划费共 ~$10-11/月）。
+
+## 第一步：安装
+
+```bash
+# 克隆仓库
+git clone https://github.com/Digidai/openclaw.git
+cd openclaw
+
+# 安装依赖
+npm install
+
+# 安装 Wrangler CLI（如果尚未安装）
+npm install -g wrangler
+
+# 登录 Cloudflare
+wrangler login
+# 浏览器会弹出授权页面，点击允许即可
+```
+
+## 第二步：设置必需的 Secrets
+
+Secrets 是通过 Wrangler CLI 安全存储在 Cloudflare 上的环境变量，不会出现在代码中。
+
+### 2.1 设置 Kimi API Key
+
+```bash
+npx wrangler secret put ANTHROPIC_API_KEY
+# 提示输入时，粘贴你的 Kimi API Key
+```
+
+> API Key 获取方式：登录 [Moonshot 开放平台](https://platform.moonshot.cn/) → API Key 管理 → 创建新的 API Key
+
+### 2.2 生成并设置 Gateway Token
+
+Gateway Token 用于保护你的控制台访问，类似于访问密码。
+
+```bash
+# 生成一个随机 token
+export MOLTBOT_GATEWAY_TOKEN=$(openssl rand -hex 32)
+
+# 显示 token（务必保存好，后续访问控制台需要用到）
+echo "你的 Gateway Token: $MOLTBOT_GATEWAY_TOKEN"
+
+# 将 token 存储到 Cloudflare
+echo "$MOLTBOT_GATEWAY_TOKEN" | npx wrangler secret put MOLTBOT_GATEWAY_TOKEN
+```
+
+## 第三步：部署
+
+```bash
+npm run deploy
+```
+
+部署过程需要几分钟，Cloudflare 会构建 Docker 镜像并启动容器。
+
+部署成功后会显示你的 Worker URL，类似：
+
+```
+https://moltbot-sandbox.your-subdomain.workers.dev
+```
+
+## 第四步：访问控制台
+
+在浏览器中打开：
+
+```
+https://moltbot-sandbox.your-subdomain.workers.dev/?token=你的GATEWAY_TOKEN
+```
+
+> 首次访问需要等待 1-2 分钟，这是容器冷启动的时间。后续访问会快很多。
+
+## 第五步：配置 Admin UI (管理后台)
+
+Admin UI 位于 `/_admin/`，用于设备管理、数据备份等。你**必须**配置 Cloudflare Access 才能使用。
+
+### 5.1 开启 Cloudflare Access
+
+1. 打开 [Workers & Pages 控制台](https://dash.cloudflare.com/?to=/:account/workers-and-pages)
+2. 点击你的 Worker（例如 `moltbot-sandbox`）
+3. 进入 **Settings** → **Domains & Routes**
+4. 在 `workers.dev` 行，点击右侧的 `...` 菜单
+5. 点击 **Enable Cloudflare Access**
+6. 记下弹出对话框中的 AUD 值
+
+### 5.2 配置访问策略
+
+1. 进入 Cloudflare 左侧菜单 **Zero Trust** → **Access** → **Applications**
+2. 找到你的 Worker 应用
+3. 添加允许访问的邮箱地址（或配置 Google / GitHub 等身份验证）
+
+### 5.3 设置 Access Secrets
+
+```bash
+# 设置 Team Domain（例如: myteam.cloudflareaccess.com，只填子域名 myteam 即可）
+# 在 Zero Trust 控制台 → Settings → Custom Pages 中可以找到
+npx wrangler secret put CF_ACCESS_TEAM_DOMAIN
+
+# 设置 AUD（步骤 5.1 中记下的值）
+npx wrangler secret put CF_ACCESS_AUD
+```
+
+### 5.4 重新部署
+
+```bash
+npm run deploy
+```
+
+现在访问 `/_admin/` 会要求你通过 Cloudflare Access 认证。
+
+## 第六步：设备配对
+
+这是最后一步。控制台 UI 需要设备配对后才能正常使用。
+
+1. 访问 `https://your-worker.workers.dev/_admin/`（需要 Cloudflare Access 认证）
+2. 在 Admin UI 中查看 **Pending Requests**（待配对请求）
+3. 在另一个浏览器标签中打开控制台 `/?token=YOUR_TOKEN`
+4. 回到 Admin UI，点击 **Approve** 批准该设备
+5. 设备配对成功，现在可以正常对话了
+
+## 可选配置
+
+### 持久化存储 (R2)
+
+默认情况下，容器重启后所有数据（配对设备、对话历史等）会丢失。配置 R2 可以实现数据持久化。
+
+```bash
+# 1. 在 Cloudflare Dashboard → R2 → 管理 API Token 中创建 token
+#    权限选择 Object Read & Write，选择 moltbot-data 桶
+
+# 2. 设置 Secrets
+npx wrangler secret put R2_ACCESS_KEY_ID       # 粘贴 Access Key ID
+npx wrangler secret put R2_SECRET_ACCESS_KEY   # 粘贴 Secret Access Key
+npx wrangler secret put CF_ACCOUNT_ID          # 粘贴 Cloudflare Account ID
+
+# 3. 重新部署
+npm run deploy
+```
+
+> Account ID 获取方式：在 [Cloudflare Dashboard](https://dash.cloudflare.com/) 首页，点击账号名旁边的 `...` 菜单 → Copy Account ID
+
+配置后，数据每 5 分钟自动同步到 R2，也可在 Admin UI 中点击 "Backup Now" 手动备份。
+
+### 容器休眠（降低成本）
+
+```bash
+npx wrangler secret put SANDBOX_SLEEP_AFTER
+# 输入: 10m（10 分钟无活动后休眠）
+```
+
+休眠后的下次请求会触发冷启动（1-2 分钟）。配合 R2 使用，数据不会丢失。
+
+### 聊天平台接入
+
+**Telegram：**
+```bash
+npx wrangler secret put TELEGRAM_BOT_TOKEN    # BotFather 创建的 token
+npm run deploy
+```
+
+**Discord：**
+```bash
+npx wrangler secret put DISCORD_BOT_TOKEN     # Discord 开发者后台的 token
+npm run deploy
+```
+
+**Slack：**
+```bash
+npx wrangler secret put SLACK_BOT_TOKEN       # Slack App 的 Bot Token
+npx wrangler secret put SLACK_APP_TOKEN       # Slack App 的 App Token
+npm run deploy
+```
+
+### 浏览器自动化 (CDP)
+
+启用后 OpenClaw 可以控制 headless 浏览器进行截图、录屏等操作。
+
+```bash
+npx wrangler secret put CDP_SECRET            # 输入一个随机字符串
+npx wrangler secret put WORKER_URL            # 输入 https://your-worker.workers.dev
+npm run deploy
+```
+
+## 本地开发
+
+```bash
+# 创建本地环境变量文件
+cat > .dev.vars << 'EOF'
+DEV_MODE=true
+DEBUG_ROUTES=true
+ANTHROPIC_API_KEY=你的Kimi_API_Key
+MOLTBOT_GATEWAY_TOKEN=任意字符串
+EOF
+
+# 启动开发服务器
+npm run dev
+```
+
+> `DEV_MODE=true` 会跳过 Cloudflare Access 认证和设备配对，仅用于本地开发。
+
+## 常用命令
+
+| 命令 | 说明 |
+|------|------|
+| `npm run dev` | 启动本地开发服务器 (Vite) |
+| `npm run start` | 启动本地 Wrangler Dev |
+| `npm run deploy` | 构建并部署到 Cloudflare |
+| `npm run build` | 仅构建，不部署 |
+| `npm run test` | 运行测试 |
+| `npm run lint` | 代码检查 |
+| `npm run typecheck` | TypeScript 类型检查 |
+| `npx wrangler secret list` | 查看已设置的 Secrets |
+| `npx wrangler secret put <NAME>` | 设置一个 Secret |
+| `npx wrangler tail` | 实时查看线上日志 |
+
+## 故障排查
+
+| 问题 | 解决方案 |
+|------|----------|
+| `npm run dev` 报 `Unauthorized` | 需要在 [Containers 控制台](https://dash.cloudflare.com/?to=/:account/workers/containers) 开启 Containers 功能 |
+| Gateway 启动失败 | 运行 `npx wrangler secret list` 检查 Secrets，运行 `npx wrangler tail` 查看日志 |
+| 首次请求很慢 | 正常现象，容器冷启动需要 1-2 分钟 |
+| R2 不工作 | 确认三个 Secret 都已设置：`R2_ACCESS_KEY_ID`、`R2_SECRET_ACCESS_KEY`、`CF_ACCOUNT_ID` |
+| Admin UI 报 Access Denied | 确认 `CF_ACCESS_TEAM_DOMAIN` 和 `CF_ACCESS_AUD` 已正确设置 |
+| 设备列表加载慢 | WebSocket 连接需要 10-15 秒，等待后刷新 |
+| 配置修改不生效 | 修改 `Dockerfile` 中的 `# Build cache bust:` 注释，然后重新部署 |
+| Windows 下 Gateway 报 exit code 126 | Git 行尾符问题，运行 `git config --global core.autocrlf input`，重新克隆仓库 |
+
+## 全部 Secrets 参考
+
+| Secret | 必需 | 说明 |
+|--------|------|------|
+| `ANTHROPIC_API_KEY` | 是 | Kimi API Key |
+| `MOLTBOT_GATEWAY_TOKEN` | 是 | 控制台访问 Token |
+| `CF_ACCESS_TEAM_DOMAIN` | 是* | Cloudflare Access Team Domain（Admin UI 需要） |
+| `CF_ACCESS_AUD` | 是* | Cloudflare Access AUD（Admin UI 需要） |
+| `R2_ACCESS_KEY_ID` | 否 | R2 存储 Access Key |
+| `R2_SECRET_ACCESS_KEY` | 否 | R2 存储 Secret Key |
+| `CF_ACCOUNT_ID` | 否 | Cloudflare Account ID（R2 需要） |
+| `SANDBOX_SLEEP_AFTER` | 否 | 容器休眠时间，默认 `never`，可设为 `10m`、`1h` 等 |
+| `TELEGRAM_BOT_TOKEN` | 否 | Telegram Bot Token |
+| `DISCORD_BOT_TOKEN` | 否 | Discord Bot Token |
+| `SLACK_BOT_TOKEN` | 否 | Slack Bot Token |
+| `SLACK_APP_TOKEN` | 否 | Slack App Token |
+| `CDP_SECRET` | 否 | 浏览器自动化认证密钥 |
+| `WORKER_URL` | 否 | Worker 公网 URL（浏览器自动化需要） |
+| `DEV_MODE` | 否 | 设为 `true` 跳过认证（仅本地开发） |
+| `DEBUG_ROUTES` | 否 | 设为 `true` 启用调试路由 |
