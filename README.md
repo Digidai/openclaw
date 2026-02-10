@@ -637,7 +637,7 @@ Admin UI 位于 `/_admin/`，用于设备管理、数据备份等。你**必须*
 ### 5.3 设置 Access Secrets
 
 ```bash
-# 设置 Team Domain（例如: myteam.cloudflareaccess.com，只填子域名 myteam 即可）
+# 设置 Team Domain（需要填写完整域名，例如: myteam.cloudflareaccess.com）
 # 在 Zero Trust 控制台 → Settings → Custom Pages 中可以找到
 npx wrangler secret put CF_ACCESS_TEAM_DOMAIN
 
@@ -784,7 +784,9 @@ npm run dev
 | `CF_ACCOUNT_ID` | 否 | Cloudflare Account ID（R2 需要） |
 | `SANDBOX_SLEEP_AFTER` | 否 | 容器休眠时间，默认 `never`，可设为 `10m`、`1h` 等 |
 | `TELEGRAM_BOT_TOKEN` | 否 | Telegram Bot Token |
+| `TELEGRAM_DM_POLICY` | 否 | Telegram 私信策略：`pairing`（默认，需配对）或 `open`（开放） |
 | `DISCORD_BOT_TOKEN` | 否 | Discord Bot Token |
+| `DISCORD_DM_POLICY` | 否 | Discord 私信策略：`pairing`（默认，需配对）或 `open`（开放） |
 | `SLACK_BOT_TOKEN` | 否 | Slack Bot Token |
 | `SLACK_APP_TOKEN` | 否 | Slack App Token |
 | `CDP_SECRET` | 否 | 浏览器自动化认证密钥 |
