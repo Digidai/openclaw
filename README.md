@@ -6,17 +6,14 @@ Run [OpenClaw](https://github.com/openclaw/openclaw) (formerly Moltbot, formerly
 
 > **Experimental:** This is a proof of concept demonstrating that OpenClaw can run in Cloudflare Sandbox. It is not officially supported and may break without notice. Use at your own risk.
 
-[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/Digidai/openclaw)
-
 ## Requirements
 
 - [Workers Paid plan](https://www.cloudflare.com/plans/developer-platform/) ($5 USD/month) — required for Cloudflare Sandbox containers
-- [Anthropic API key](https://console.anthropic.com/) — for Claude access, or you can use AI Gateway's [Unified Billing](https://developers.cloudflare.com/ai-gateway/features/unified-billing/)
+- [Kimi API key](https://platform.moonshot.cn/) — this fork uses Kimi (Moonshot AI) as the default AI provider
 
 The following Cloudflare features used by this project have free tiers:
 - Cloudflare Access (authentication)
 - Browser Rendering (for browser navigation)
-- AI Gateway (optional, for API routing/analytics)
 - R2 Storage (optional, for persistence)
 
 ## Container Cost Estimate
@@ -54,41 +51,62 @@ This project packages OpenClaw to run in a [Cloudflare Sandbox](https://develope
 
 ![moltworker architecture](./assets/architecture.png)
 
-## Quick Start
+## Quick Start (CLI Deploy)
 
-_Cloudflare Sandboxes are available on the [Workers Paid plan](https://dash.cloudflare.com/?to=/:account/workers/plans)._
+> **Note:** This project uses Containers, Durable Objects, R2 and Browser Rendering bindings. The "Deploy to Cloudflare" one-click button may fail with these complex bindings. **Please use the CLI steps below instead.**
+
+### Prerequisites
+
+1. Install [Node.js](https://nodejs.org/) (>= 18)
+2. Install [Wrangler CLI](https://developers.cloudflare.com/workers/wrangler/install-and-update/): `npm install -g wrangler`
+3. Log in to Cloudflare: `wrangler login`
+4. Enable Cloudflare Containers in the [Containers dashboard](https://dash.cloudflare.com/?to=/:account/workers/containers)
+5. Ensure you are on the [Workers Paid plan](https://dash.cloudflare.com/?to=/:account/workers/plans) ($5/month)
+
+### Step 1: Clone and Install
 
 ```bash
-# Install dependencies
+git clone https://github.com/Digidai/openclaw.git
+cd openclaw
 npm install
+```
 
-# Set your API key (direct Anthropic access)
+### Step 2: Set Required Secrets
+
+```bash
+# Set your Kimi API key (required)
+# Get your key at https://platform.moonshot.cn/
 npx wrangler secret put ANTHROPIC_API_KEY
-
-# Or use Cloudflare AI Gateway instead (see "Optional: Cloudflare AI Gateway" below)
-# npx wrangler secret put CLOUDFLARE_AI_GATEWAY_API_KEY
-# npx wrangler secret put CF_AI_GATEWAY_ACCOUNT_ID
-# npx wrangler secret put CF_AI_GATEWAY_GATEWAY_ID
+# Paste your Kimi API key when prompted
 
 # Generate and set a gateway token (required for remote access)
-# Save this token - you'll need it to access the Control UI
+# Save this token — you'll need it to access the Control UI
 export MOLTBOT_GATEWAY_TOKEN=$(openssl rand -hex 32)
 echo "Your gateway token: $MOLTBOT_GATEWAY_TOKEN"
 echo "$MOLTBOT_GATEWAY_TOKEN" | npx wrangler secret put MOLTBOT_GATEWAY_TOKEN
+```
 
-# Deploy
+### Step 3: Deploy
+
+```bash
 npm run deploy
 ```
 
-After deploying, open the Control UI with your token:
+Deployment takes a few minutes as Cloudflare builds the Docker container image.
+
+### Step 4: Access the Control UI
+
+After deploying, open the Control UI in your browser:
 
 ```
 https://your-worker.workers.dev/?token=YOUR_GATEWAY_TOKEN
 ```
 
-Replace `your-worker` with your actual worker subdomain and `YOUR_GATEWAY_TOKEN` with the token you generated above.
+Replace `your-worker` with your actual worker subdomain (shown in the deploy output) and `YOUR_GATEWAY_TOKEN` with the token you generated above.
 
-**Note:** The first request may take 1-2 minutes while the container starts.
+**Note:** The first request may take 1-2 minutes while the container cold-starts.
+
+### Step 5: Set Up Admin UI and Device Pairing
 
 > **Important:** You will not be able to use the Control UI until you complete the following steps. You MUST:
 > 1. [Set up Cloudflare Access](#setting-up-the-admin-ui) to protect the admin UI
