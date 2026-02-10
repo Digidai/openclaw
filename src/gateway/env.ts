@@ -24,17 +24,8 @@ export function buildEnvVars(env: MoltbotEnv): Record<string, string> {
   if (env.ANTHROPIC_API_KEY) envVars.ANTHROPIC_API_KEY = env.ANTHROPIC_API_KEY;
   if (env.OPENAI_API_KEY) envVars.OPENAI_API_KEY = env.OPENAI_API_KEY;
 
-  // Legacy AI Gateway support: AI_GATEWAY_BASE_URL + AI_GATEWAY_API_KEY
-  // When set, these override direct keys for backward compatibility
-  if (env.AI_GATEWAY_API_KEY && env.AI_GATEWAY_BASE_URL) {
-    const normalizedBaseUrl = env.AI_GATEWAY_BASE_URL.replace(/\/+$/, '');
-    envVars.AI_GATEWAY_BASE_URL = normalizedBaseUrl;
-    // Legacy path routes through Anthropic base URL
-    envVars.ANTHROPIC_BASE_URL = normalizedBaseUrl;
-    envVars.ANTHROPIC_API_KEY = env.AI_GATEWAY_API_KEY;
-  } else if (env.ANTHROPIC_BASE_URL) {
-    envVars.ANTHROPIC_BASE_URL = env.ANTHROPIC_BASE_URL;
-  }
+  // Always use Kimi API as the Anthropic-compatible endpoint
+  envVars.ANTHROPIC_BASE_URL = 'https://api.kimi.com/coding/';
 
   // Map MOLTBOT_GATEWAY_TOKEN to OPENCLAW_GATEWAY_TOKEN (container expects this name)
   if (env.MOLTBOT_GATEWAY_TOKEN) envVars.OPENCLAW_GATEWAY_TOKEN = env.MOLTBOT_GATEWAY_TOKEN;

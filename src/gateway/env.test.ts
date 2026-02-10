@@ -3,10 +3,10 @@ import { buildEnvVars } from './env';
 import { createMockEnv } from '../test-utils';
 
 describe('buildEnvVars', () => {
-  it('returns empty object when no env vars set', () => {
+  it('returns only Kimi base URL when no env vars set', () => {
     const env = createMockEnv();
     const result = buildEnvVars(env);
-    expect(result).toEqual({});
+    expect(result).toEqual({ ANTHROPIC_BASE_URL: 'https://api.kimi.com/coding/' });
   });
 
   it('includes ANTHROPIC_API_KEY when set directly', () => {
@@ -46,52 +46,20 @@ describe('buildEnvVars', () => {
     expect(result.ANTHROPIC_API_KEY).toBe('sk-anthro');
   });
 
-  // Legacy AI Gateway support
-  it('maps legacy AI_GATEWAY_API_KEY to ANTHROPIC_API_KEY with base URL', () => {
-    const env = createMockEnv({
-      AI_GATEWAY_API_KEY: 'sk-gateway-key',
-      AI_GATEWAY_BASE_URL: 'https://gateway.ai.cloudflare.com/v1/123/my-gw/anthropic',
-    });
-    const result = buildEnvVars(env);
-    expect(result.ANTHROPIC_API_KEY).toBe('sk-gateway-key');
-    expect(result.ANTHROPIC_BASE_URL).toBe(
-      'https://gateway.ai.cloudflare.com/v1/123/my-gw/anthropic',
-    );
-    expect(result.AI_GATEWAY_BASE_URL).toBe(
-      'https://gateway.ai.cloudflare.com/v1/123/my-gw/anthropic',
-    );
-  });
-
-  it('legacy AI_GATEWAY_* overrides direct ANTHROPIC_API_KEY', () => {
-    const env = createMockEnv({
-      AI_GATEWAY_API_KEY: 'gateway-key',
-      AI_GATEWAY_BASE_URL: 'https://gateway.example.com/anthropic',
-      ANTHROPIC_API_KEY: 'direct-key',
-    });
-    const result = buildEnvVars(env);
-    expect(result.ANTHROPIC_API_KEY).toBe('gateway-key');
-    expect(result.AI_GATEWAY_BASE_URL).toBe('https://gateway.example.com/anthropic');
-  });
-
-  it('strips trailing slashes from legacy AI_GATEWAY_BASE_URL', () => {
-    const env = createMockEnv({
-      AI_GATEWAY_API_KEY: 'sk-gateway-key',
-      AI_GATEWAY_BASE_URL: 'https://gateway.ai.cloudflare.com/v1/123/my-gw/anthropic///',
-    });
-    const result = buildEnvVars(env);
-    expect(result.AI_GATEWAY_BASE_URL).toBe(
-      'https://gateway.ai.cloudflare.com/v1/123/my-gw/anthropic',
-    );
-  });
-
-  it('falls back to ANTHROPIC_BASE_URL when no AI_GATEWAY_BASE_URL', () => {
+  // Kimi API base URL
+  it('always sets ANTHROPIC_BASE_URL to Kimi API endpoint', () => {
     const env = createMockEnv({
       ANTHROPIC_API_KEY: 'direct-key',
-      ANTHROPIC_BASE_URL: 'https://api.anthropic.com',
     });
     const result = buildEnvVars(env);
     expect(result.ANTHROPIC_API_KEY).toBe('direct-key');
-    expect(result.ANTHROPIC_BASE_URL).toBe('https://api.anthropic.com');
+    expect(result.ANTHROPIC_BASE_URL).toBe('https://api.kimi.com/coding/');
+  });
+
+  it('sets Kimi base URL even with no other env vars', () => {
+    const env = createMockEnv();
+    const result = buildEnvVars(env);
+    expect(result.ANTHROPIC_BASE_URL).toBe('https://api.kimi.com/coding/');
   });
 
   // Gateway token mapping
@@ -154,6 +122,7 @@ describe('buildEnvVars', () => {
 
     expect(result).toEqual({
       ANTHROPIC_API_KEY: 'sk-key',
+      ANTHROPIC_BASE_URL: 'https://api.kimi.com/coding/',
       OPENCLAW_GATEWAY_TOKEN: 'token',
       TELEGRAM_BOT_TOKEN: 'tg',
     });
