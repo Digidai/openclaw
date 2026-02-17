@@ -4,11 +4,9 @@ import { createAccessMiddleware } from '../auth';
 import {
   ensureMoltbotGateway,
   findExistingMoltbotProcess,
-  mountR2Storage,
   syncToR2,
   waitForProcess,
 } from '../gateway';
-import { R2_MOUNT_PATH } from '../config';
 
 // CLI commands can take 10-15 seconds to complete due to WebSocket connection overhead
 const CLI_TIMEOUT_MS = 20000;
@@ -205,7 +203,6 @@ adminApi.get('/storage', async (c) => {
     c.env.CF_ACCOUNT_ID
   );
 
-  // Check which credentials are missing
   const missing: string[] = [];
   if (!c.env.R2_ACCESS_KEY_ID) missing.push('R2_ACCESS_KEY_ID');
   if (!c.env.R2_SECRET_ACCESS_KEY) missing.push('R2_SECRET_ACCESS_KEY');
@@ -213,19 +210,10 @@ adminApi.get('/storage', async (c) => {
 
   let lastSync: string | null = null;
 
-  // If R2 is configured, check for last sync timestamp
   if (hasCredentials) {
     try {
-      // Mount R2 if not already mounted
-      await mountR2Storage(sandbox, c.env);
-
-      // Check for sync marker file
-      const proc = await sandbox.startProcess(
-        `cat ${R2_MOUNT_PATH}/.last-sync 2>/dev/null || echo ""`,
-      );
-      await waitForProcess(proc, 5000);
-      const logs = await proc.getLogs();
-      const timestamp = logs.stdout?.trim();
+      const result = await sandbox.exec('cat /tmp/.last-sync 2>/dev/null || echo ""');
+      const timestamp = result.stdout?.trim();
       if (timestamp && timestamp !== '') {
         lastSync = timestamp;
       }

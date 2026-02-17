@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import type { AppEnv } from '../types';
-import { findExistingMoltbotProcess } from '../gateway';
+import { findExistingMoltbotProcess, waitForProcess } from '../gateway';
 
 /**
  * Debug routes for inspecting container state
@@ -132,22 +132,14 @@ debug.get('/cli', async (c) => {
 
   try {
     const proc = await sandbox.startProcess(cmd);
-
-    // Wait longer for command to complete
-    let attempts = 0;
-    while (attempts < 30) {
-      // eslint-disable-next-line no-await-in-loop -- intentional sequential polling
-      await new Promise((r) => setTimeout(r, 500));
-      if (proc.status !== 'running') break;
-      attempts++;
-    }
+    await waitForProcess(proc, 120000);
 
     const logs = await proc.getLogs();
+    const status = proc.getStatus ? await proc.getStatus() : proc.status;
     return c.json({
       command: cmd,
-      status: proc.status,
+      status,
       exitCode: proc.exitCode,
-      attempts,
       stdout: logs.stdout || '',
       stderr: logs.stderr || '',
     });
@@ -368,14 +360,7 @@ debug.get('/container-config', async (c) => {
 
   try {
     const proc = await sandbox.startProcess('cat /root/.openclaw/openclaw.json');
-
-    let attempts = 0;
-    while (attempts < 10) {
-      // eslint-disable-next-line no-await-in-loop -- intentional sequential polling
-      await new Promise((r) => setTimeout(r, 200));
-      if (proc.status !== 'running') break;
-      attempts++;
-    }
+    await waitForProcess(proc, 5000);
 
     const logs = await proc.getLogs();
     const stdout = logs.stdout || '';

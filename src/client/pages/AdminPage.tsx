@@ -358,8 +358,8 @@ export default function AdminPage() {
               </div>
             ) : (
               <div className="devices-grid">
-                {paired.map((device, index) => (
-                  <div key={device.deviceId || index} className="device-card paired">
+                {paired.map((device) => (
+                  <div key={device.deviceId} className="device-card paired">
                     <div className="device-header">
                       <span className="device-name">
                         {device.displayName || device.deviceId || 'Unknown Device'}
