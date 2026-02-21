@@ -3,10 +3,10 @@ import { buildEnvVars } from './env';
 import { createMockEnv } from '../test-utils';
 
 describe('buildEnvVars', () => {
-  it('returns only Kimi base URL when no env vars set', () => {
+  it('returns empty object when no env vars set', () => {
     const env = createMockEnv();
     const result = buildEnvVars(env);
-    expect(result).toEqual({ ANTHROPIC_BASE_URL: 'https://api.kimi.com/coding/' });
+    expect(result).toEqual({});
   });
 
   it('includes ANTHROPIC_API_KEY when set directly', () => {
@@ -19,6 +19,12 @@ describe('buildEnvVars', () => {
     const env = createMockEnv({ OPENAI_API_KEY: 'sk-openai-key' });
     const result = buildEnvVars(env);
     expect(result.OPENAI_API_KEY).toBe('sk-openai-key');
+  });
+
+  it('includes ZAI_API_KEY when set directly', () => {
+    const env = createMockEnv({ ZAI_API_KEY: 'zai-key' });
+    const result = buildEnvVars(env);
+    expect(result.ZAI_API_KEY).toBe('zai-key');
   });
 
   // Cloudflare AI Gateway (new native provider)
@@ -46,20 +52,21 @@ describe('buildEnvVars', () => {
     expect(result.ANTHROPIC_API_KEY).toBe('sk-anthro');
   });
 
-  // Kimi API base URL
-  it('always sets ANTHROPIC_BASE_URL to Kimi API endpoint', () => {
+  // Anthropic base URL override
+  it('passes ANTHROPIC_BASE_URL when configured', () => {
     const env = createMockEnv({
       ANTHROPIC_API_KEY: 'direct-key',
+      ANTHROPIC_BASE_URL: 'https://api.z.ai/api/anthropic',
     });
     const result = buildEnvVars(env);
     expect(result.ANTHROPIC_API_KEY).toBe('direct-key');
-    expect(result.ANTHROPIC_BASE_URL).toBe('https://api.kimi.com/coding/');
+    expect(result.ANTHROPIC_BASE_URL).toBe('https://api.z.ai/api/anthropic');
   });
 
-  it('sets Kimi base URL even with no other env vars', () => {
+  it('does not set ANTHROPIC_BASE_URL by default', () => {
     const env = createMockEnv();
     const result = buildEnvVars(env);
-    expect(result.ANTHROPIC_BASE_URL).toBe('https://api.kimi.com/coding/');
+    expect(result.ANTHROPIC_BASE_URL).toBeUndefined();
   });
 
   // Gateway token mapping
@@ -112,6 +119,12 @@ describe('buildEnvVars', () => {
     expect(result.CF_ACCOUNT_ID).toBe('acct-123');
   });
 
+  it('passes OPENCLAW_DEFAULT_MODEL to container', () => {
+    const env = createMockEnv({ OPENCLAW_DEFAULT_MODEL: 'anthropic/glm-4.7' });
+    const result = buildEnvVars(env);
+    expect(result.OPENCLAW_DEFAULT_MODEL).toBe('anthropic/glm-4.7');
+  });
+
   it('combines all env vars correctly', () => {
     const env = createMockEnv({
       ANTHROPIC_API_KEY: 'sk-key',
@@ -122,7 +135,6 @@ describe('buildEnvVars', () => {
 
     expect(result).toEqual({
       ANTHROPIC_API_KEY: 'sk-key',
-      ANTHROPIC_BASE_URL: 'https://api.kimi.com/coding/',
       OPENCLAW_GATEWAY_TOKEN: 'token',
       TELEGRAM_BOT_TOKEN: 'tg',
     });

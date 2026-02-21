@@ -1,2 +1,2 @@
 export { verifyAccessJWT } from './jwt';
-export { createAccessMiddleware, isDevMode, extractJWT } from './middleware';
+export { createAccessMiddleware, createBasicAuthMiddleware, isDevMode, extractJWT } from './middleware';

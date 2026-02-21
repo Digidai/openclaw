@@ -65,6 +65,7 @@ export class AuthError extends Error {
 async function apiRequest<T>(path: string, options: globalThis.RequestInit = {}): Promise<T> {
   const response = await fetch(`${API_BASE}${path}`, {
     ...options,
+    cache: 'no-store',
     credentials: 'include',
     headers: {
       'Content-Type': 'application/json',

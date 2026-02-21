@@ -1,6 +1,5 @@
 import { Hono } from 'hono';
 import type { AppEnv } from '../types';
-import { createAccessMiddleware } from '../auth';
 import {
   ensureMoltbotGateway,
   findExistingMoltbotProcess,
@@ -13,19 +12,16 @@ const CLI_TIMEOUT_MS = 20000;
 
 /**
  * API routes
- * - /api/admin/* - Protected admin API routes (Cloudflare Access required)
+ * - /api/admin/* - Protected admin API routes (Basic Auth required)
  *
  * Note: /api/status is now handled by publicRoutes (no auth required)
  */
 const api = new Hono<AppEnv>();
 
 /**
- * Admin API routes - all protected by Cloudflare Access
+ * Admin API routes - protected by Basic Auth (applied in index.ts)
  */
 const adminApi = new Hono<AppEnv>();
-
-// Middleware: Verify Cloudflare Access JWT for all admin routes
-adminApi.use('*', createAccessMiddleware({ type: 'json' }));
 
 // GET /api/admin/devices - List pending and paired devices
 adminApi.get('/devices', async (c) => {
@@ -221,6 +217,9 @@ adminApi.get('/storage', async (c) => {
       // Ignore errors checking sync status
     }
   }
+
+  c.header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+  c.header('Pragma', 'no-cache');
 
   return c.json({
     configured: hasCredentials,

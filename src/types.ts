@@ -18,7 +18,9 @@ export interface MoltbotEnv {
   // Direct provider configuration
   ANTHROPIC_API_KEY?: string;
   ANTHROPIC_BASE_URL?: string;
+  ZAI_API_KEY?: string; // Optional native z.ai provider key
   OPENAI_API_KEY?: string;
+  OPENCLAW_DEFAULT_MODEL?: string; // Optional default model id for OpenClaw, e.g. anthropic/glm-4.7
   MOLTBOT_GATEWAY_TOKEN?: string; // Gateway token (mapped to OPENCLAW_GATEWAY_TOKEN for container)
   DEV_MODE?: string; // Set to 'true' for local dev (skips CF Access auth + openclaw device pairing)
   E2E_TEST_MODE?: string; // Set to 'true' for E2E tests (skips CF Access auth but keeps device pairing)
@@ -30,6 +32,9 @@ export interface MoltbotEnv {
   DISCORD_DM_POLICY?: string;
   SLACK_BOT_TOKEN?: string;
   SLACK_APP_TOKEN?: string;
+  // HTTP Basic Auth credentials
+  BASIC_AUTH_USERNAME?: string;
+  BASIC_AUTH_PASSWORD?: string;
   // Cloudflare Access configuration for admin routes
   CF_ACCESS_TEAM_DOMAIN?: string; // e.g., 'myteam.cloudflareaccess.com'
   CF_ACCESS_AUD?: string; // Application Audience (AUD) tag

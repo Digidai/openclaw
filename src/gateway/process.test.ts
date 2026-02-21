@@ -114,6 +114,19 @@ describe('findExistingMoltbotProcess', () => {
     expect(result).toBeNull();
   });
 
+  it('handles listProcesses timeout gracefully', async () => {
+    vi.useFakeTimers();
+    const sandbox = {
+      listProcesses: vi.fn(() => new Promise<Process[]>(() => {})),
+    } as unknown as Sandbox;
+
+    const resultPromise = findExistingMoltbotProcess(sandbox);
+    await vi.advanceTimersByTimeAsync(5001);
+
+    await expect(resultPromise).resolves.toBeNull();
+    vi.useRealTimers();
+  });
+
   it('returns first matching gateway process', async () => {
     const firstGateway = createFullMockProcess({
       id: 'gateway-1',

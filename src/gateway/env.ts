@@ -22,10 +22,11 @@ export function buildEnvVars(env: MoltbotEnv): Record<string, string> {
 
   // Direct provider keys
   if (env.ANTHROPIC_API_KEY) envVars.ANTHROPIC_API_KEY = env.ANTHROPIC_API_KEY;
+  if (env.ZAI_API_KEY) envVars.ZAI_API_KEY = env.ZAI_API_KEY;
   if (env.OPENAI_API_KEY) envVars.OPENAI_API_KEY = env.OPENAI_API_KEY;
 
-  // Always use Kimi API as the Anthropic-compatible endpoint
-  envVars.ANTHROPIC_BASE_URL = 'https://api.kimi.com/coding/';
+  // Optional Anthropic-compatible endpoint override (e.g. z.ai)
+  if (env.ANTHROPIC_BASE_URL) envVars.ANTHROPIC_BASE_URL = env.ANTHROPIC_BASE_URL;
 
   // Map MOLTBOT_GATEWAY_TOKEN to OPENCLAW_GATEWAY_TOKEN (container expects this name)
   if (env.MOLTBOT_GATEWAY_TOKEN) envVars.OPENCLAW_GATEWAY_TOKEN = env.MOLTBOT_GATEWAY_TOKEN;
@@ -37,6 +38,7 @@ export function buildEnvVars(env: MoltbotEnv): Record<string, string> {
   if (env.SLACK_BOT_TOKEN) envVars.SLACK_BOT_TOKEN = env.SLACK_BOT_TOKEN;
   if (env.SLACK_APP_TOKEN) envVars.SLACK_APP_TOKEN = env.SLACK_APP_TOKEN;
   if (env.CF_AI_GATEWAY_MODEL) envVars.CF_AI_GATEWAY_MODEL = env.CF_AI_GATEWAY_MODEL;
+  if (env.OPENCLAW_DEFAULT_MODEL) envVars.OPENCLAW_DEFAULT_MODEL = env.OPENCLAW_DEFAULT_MODEL;
   if (env.CF_ACCOUNT_ID) envVars.CF_ACCOUNT_ID = env.CF_ACCOUNT_ID;
   if (env.CDP_SECRET) envVars.CDP_SECRET = env.CDP_SECRET;
   if (env.WORKER_URL) envVars.WORKER_URL = env.WORKER_URL;

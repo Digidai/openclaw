@@ -1,6 +1,47 @@
-import type { Context, Next } from 'hono';
+import type { Context, MiddlewareHandler, Next } from 'hono';
 import type { AppEnv, MoltbotEnv } from '../types';
 import { verifyAccessJWT } from './jwt';
+
+/**
+ * Create an HTTP Basic Auth middleware.
+ *
+ * If BASIC_AUTH_USERNAME and BASIC_AUTH_PASSWORD are set, requires valid
+ * credentials via the standard WWW-Authenticate / Authorization: Basic flow.
+ * If neither is set, auth is skipped (open access).
+ * In dev mode, auth is also skipped.
+ */
+export function createBasicAuthMiddleware(): MiddlewareHandler<AppEnv> {
+  return async (c: Context<AppEnv>, next: Next) => {
+    // Skip auth in dev mode
+    if (isDevMode(c.env)) {
+      return next();
+    }
+
+    const username = c.env.BASIC_AUTH_USERNAME;
+    const password = c.env.BASIC_AUTH_PASSWORD;
+
+    // If credentials not configured, skip auth
+    if (!username || !password) {
+      return next();
+    }
+
+    const authHeader = c.req.header('Authorization');
+    if (authHeader) {
+      const match = authHeader.match(/^Basic\s+(.+)$/i);
+      if (match) {
+        const decoded = atob(match[1]);
+        const [user, pass] = [decoded.slice(0, decoded.indexOf(':')), decoded.slice(decoded.indexOf(':') + 1)];
+        if (user === username && pass === password) {
+          return next();
+        }
+      }
+    }
+
+    return c.text('Unauthorized', 401, {
+      'WWW-Authenticate': 'Basic realm="Moltbot"',
+    });
+  };
+}
 
 /**
  * Options for creating an access middleware
@@ -59,29 +100,10 @@ export function createAccessMiddleware(options: AccessMiddlewareOptions) {
     const teamDomain = c.env.CF_ACCESS_TEAM_DOMAIN;
     const expectedAud = c.env.CF_ACCESS_AUD;
 
-    // Check if CF Access is configured
+    // If CF Access is not configured, skip auth (allow direct access)
     if (!teamDomain || !expectedAud) {
-      if (type === 'json') {
-        return c.json(
-          {
-            error: 'Cloudflare Access not configured',
-            hint: 'Set CF_ACCESS_TEAM_DOMAIN and CF_ACCESS_AUD environment variables',
-          },
-          500,
-        );
-      } else {
-        return c.html(
-          `
-          <html>
-            <body>
-              <h1>Admin UI Not Configured</h1>
-              <p>Set CF_ACCESS_TEAM_DOMAIN and CF_ACCESS_AUD environment variables.</p>
-            </body>
-          </html>
-        `,
-          500,
-        );
-      }
+      c.set('accessUser', { email: 'anonymous@local', name: 'Anonymous' });
+      return next();
     }
 
     // Get JWT

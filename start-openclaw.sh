@@ -153,6 +153,13 @@ try {
 
 config.gateway = config.gateway || {};
 config.channels = config.channels || {};
+config.agents = config.agents || {};
+config.agents.defaults = config.agents.defaults || {};
+config.tools = config.tools || {};
+
+const anthropicBaseUrl = process.env.ANTHROPIC_BASE_URL || '';
+const isZaiAnthropicBase = anthropicBaseUrl.includes('api.z.ai/api/anthropic');
+const zaiApiKey = process.env.ZAI_API_KEY || (isZaiAnthropicBase ? process.env.ANTHROPIC_API_KEY : undefined);
 
 // Gateway configuration
 config.gateway.port = 18789;
@@ -167,6 +174,125 @@ if (process.env.OPENCLAW_GATEWAY_TOKEN) {
 if (process.env.OPENCLAW_DEV_MODE === 'true') {
     config.gateway.controlUi = config.gateway.controlUi || {};
     config.gateway.controlUi.allowInsecureAuth = true;
+}
+
+// Ensure a default model is configured for direct Anthropic-compatible providers.
+// Some onboard flows may not persist agents.defaults.model, which can lead to
+// empty assistant turns in WebChat.
+const defaultModel = process.env.OPENCLAW_DEFAULT_MODEL || (zaiApiKey ? 'zai/glm-4.7' : 'anthropic/claude-opus-4-5');
+const defaultFallback = zaiApiKey ? 'zai/glm-4.7-flash' : undefined;
+if (process.env.OPENCLAW_DEFAULT_MODEL) {
+    config.agents.defaults.model = defaultFallback
+        ? { primary: process.env.OPENCLAW_DEFAULT_MODEL, fallbacks: [defaultFallback] }
+        : { primary: process.env.OPENCLAW_DEFAULT_MODEL };
+} else if (!config.agents.defaults.model && process.env.ANTHROPIC_API_KEY) {
+    config.agents.defaults.model = defaultFallback
+        ? { primary: defaultModel, fallbacks: [defaultFallback] }
+        : { primary: defaultModel };
+}
+
+// Migrate invalid historical model values that OpenClaw cannot resolve.
+if (config.agents.defaults.model?.primary === 'anthropic/kimi-for-coding') {
+    config.agents.defaults.model = { primary: defaultModel };
+}
+
+// Auto-migrate Anthropic model defaults to native z.ai provider when using z.ai base URL.
+if (zaiApiKey && config.agents.defaults.model?.primary?.startsWith('anthropic/')) {
+    config.agents.defaults.model = defaultFallback
+        ? { primary: defaultModel, fallbacks: [defaultFallback] }
+        : { primary: defaultModel };
+}
+
+// Aggressive capability profile.
+config.agents.defaults.maxConcurrent = 8;
+config.agents.defaults.subagents = { maxConcurrent: 12 };
+config.agents.defaults.contextPruning = { mode: 'cache-ttl', ttl: '2h' };
+config.agents.defaults.compaction = { mode: 'safeguard' };
+config.agents.defaults.heartbeat = { every: '20m' };
+config.agents.defaults.workspace = '/root/.openclaw/workspace';
+
+config.agents.list = [
+    {
+        id: 'main',
+        name: 'Main Agent',
+        tools: {
+            profile: 'coding',
+            allow: ['group:fs', 'group:runtime', 'group:sessions', 'group:memory', 'web_search', 'web_fetch', 'image'],
+            deny: ['gateway', 'cron'],
+        },
+    },
+    {
+        id: 'research',
+        name: 'Research Agent',
+        tools: {
+            profile: 'full',
+            allow: ['web_search', 'web_fetch', 'browser', 'sessions_send', 'sessions_history', 'session_status', 'read'],
+            deny: ['exec', 'process', 'write', 'edit', 'apply_patch', 'gateway'],
+        },
+    },
+    {
+        id: 'ops',
+        name: 'Ops Agent',
+        tools: {
+            profile: 'full',
+            allow: ['*'],
+        },
+    },
+    {
+        id: 'safety',
+        name: 'Safety Agent',
+        tools: {
+            profile: 'minimal',
+            allow: ['session_status', 'sessions_history', 'read'],
+            deny: ['group:runtime', 'group:fs', 'gateway', 'cron', 'browser'],
+        },
+    },
+];
+
+config.tools.profile = 'coding';
+config.tools.byProvider = {
+    zai: {
+        allow: ['group:fs', 'group:runtime', 'group:sessions', 'group:memory', 'web_search', 'web_fetch', 'image'],
+    },
+};
+if (config.tools.loopDetection) {
+    delete config.tools.loopDetection;
+}
+
+// Undo temporary debug overrides from prior troubleshooting runs.
+if (config.agents.defaults.workspace === '/tmp/openclaw-ws-empty') {
+    config.agents.defaults.workspace = '/root/.openclaw/workspace';
+}
+
+// Ensure z.ai auth provider + token profile exists when z.ai is selected.
+if (zaiApiKey) {
+    config.auth = config.auth || {};
+    config.auth.profiles = config.auth.profiles || {};
+    config.auth.profiles['zai:default'] = { provider: 'zai', mode: 'api_key' };
+
+    const authDir = '/root/.openclaw/agents/main/agent';
+    const authPath = authDir + '/auth-profiles.json';
+    try {
+        fs.mkdirSync(authDir, { recursive: true });
+        let authStore = { version: 1, profiles: {}, lastGood: {}, usageStats: {} };
+        if (fs.existsSync(authPath)) {
+            authStore = JSON.parse(fs.readFileSync(authPath, 'utf8'));
+        }
+        authStore.version = authStore.version || 1;
+        authStore.profiles = authStore.profiles || {};
+        authStore.lastGood = authStore.lastGood || {};
+        authStore.usageStats = authStore.usageStats || {};
+        authStore.profiles['zai:default'] = {
+            type: 'api_key',
+            provider: 'zai',
+            key: zaiApiKey,
+        };
+        authStore.lastGood.zai = 'zai:default';
+        fs.writeFileSync(authPath, JSON.stringify(authStore, null, 2));
+        console.log('Configured z.ai auth profile at', authPath);
+    } catch (e) {
+        console.warn('Failed to write z.ai auth profile:', e.message || e);
+    }
 }
 
 // Legacy AI Gateway base URL override:

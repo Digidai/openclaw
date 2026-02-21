@@ -4,6 +4,24 @@ import { MOLTBOT_PORT, STARTUP_TIMEOUT_MS } from '../config';
 import { buildEnvVars } from './env';
 import { ensureRcloneConfig } from './r2';
 
+const LIST_PROCESSES_TIMEOUT_MS = 5000;
+
+async function listProcessesWithTimeout(sandbox: Sandbox): Promise<Process[]> {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      sandbox.listProcesses(),
+      new Promise<Process[]>((_, reject) => {
+        timeoutId = setTimeout(() => {
+          reject(new Error(`listProcesses timed out after ${LIST_PROCESSES_TIMEOUT_MS}ms`));
+        }, LIST_PROCESSES_TIMEOUT_MS);
+      }),
+    ]);
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
+  }
+}
+
 /**
  * Find an existing OpenClaw gateway process
  *
@@ -12,7 +30,7 @@ import { ensureRcloneConfig } from './r2';
  */
 export async function findExistingMoltbotProcess(sandbox: Sandbox): Promise<Process | null> {
   try {
-    const processes = await sandbox.listProcesses();
+    const processes = await listProcessesWithTimeout(sandbox);
     for (const proc of processes) {
       // Match gateway process (openclaw gateway or legacy clawdbot gateway)
       // Don't match CLI commands like "openclaw devices list"

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { isDevMode, isE2ETestMode, extractJWT } from './middleware';
+import { isDevMode, isE2ETestMode, extractJWT, createBasicAuthMiddleware } from './middleware';
 import type { MoltbotEnv } from '../types';
 import type { Context } from 'hono';
 import type { AppEnv } from '../types';
@@ -200,29 +200,18 @@ describe('createAccessMiddleware', () => {
     });
   });
 
-  it('returns 500 JSON error when CF Access not configured', async () => {
-    const { c, jsonMock } = createFullMockContext({ env: {} });
+  it('skips auth and allows access when CF Access not configured', async () => {
+    const { c, setMock } = createFullMockContext({ env: {} });
     const middleware = createAccessMiddleware({ type: 'json' });
     const next = vi.fn();
 
     await middleware(c, next);
 
-    expect(next).not.toHaveBeenCalled();
-    expect(jsonMock).toHaveBeenCalledWith(
-      expect.objectContaining({ error: 'Cloudflare Access not configured' }),
-      500,
-    );
-  });
-
-  it('returns 500 HTML error when CF Access not configured', async () => {
-    const { c, htmlMock } = createFullMockContext({ env: {} });
-    const middleware = createAccessMiddleware({ type: 'html' });
-    const next = vi.fn();
-
-    await middleware(c, next);
-
-    expect(next).not.toHaveBeenCalled();
-    expect(htmlMock).toHaveBeenCalledWith(expect.stringContaining('Admin UI Not Configured'), 500);
+    expect(next).toHaveBeenCalled();
+    expect(setMock).toHaveBeenCalledWith('accessUser', {
+      email: 'anonymous@local',
+      name: 'Anonymous',
+    });
   });
 
   it('returns 401 JSON error when JWT is missing', async () => {
@@ -262,5 +251,110 @@ describe('createAccessMiddleware', () => {
 
     expect(next).not.toHaveBeenCalled();
     expect(redirectMock).toHaveBeenCalledWith('https://team.cloudflareaccess.com', 302);
+  });
+});
+
+describe('createBasicAuthMiddleware', () => {
+  function createBasicAuthContext(options: {
+    env?: Partial<MoltbotEnv>;
+    authorization?: string;
+  }): {
+    c: Context<AppEnv>;
+    textMock: ReturnType<typeof vi.fn>;
+  } {
+    const headers = new Headers();
+    if (options.authorization) {
+      headers.set('Authorization', options.authorization);
+    }
+
+    const textMock = vi.fn().mockReturnValue(new Response('Unauthorized', { status: 401 }));
+
+    const c = {
+      req: {
+        header: (name: string) => headers.get(name),
+        raw: { headers },
+      },
+      env: createMockEnv(options.env),
+      text: textMock,
+    } as unknown as Context<AppEnv>;
+
+    return { c, textMock };
+  }
+
+  it('skips auth in dev mode', async () => {
+    const { c } = createBasicAuthContext({ env: { DEV_MODE: 'true', BASIC_AUTH_USERNAME: 'user', BASIC_AUTH_PASSWORD: 'pass' } });
+    const middleware = createBasicAuthMiddleware();
+    const next = vi.fn();
+
+    await middleware(c, next);
+
+    expect(next).toHaveBeenCalled();
+  });
+
+  it('skips auth when credentials not configured', async () => {
+    const { c } = createBasicAuthContext({ env: {} });
+    const middleware = createBasicAuthMiddleware();
+    const next = vi.fn();
+
+    await middleware(c, next);
+
+    expect(next).toHaveBeenCalled();
+  });
+
+  it('returns 401 when no Authorization header', async () => {
+    const { c, textMock } = createBasicAuthContext({
+      env: { BASIC_AUTH_USERNAME: 'admin', BASIC_AUTH_PASSWORD: 'secret' },
+    });
+    const middleware = createBasicAuthMiddleware();
+    const next = vi.fn();
+
+    await middleware(c, next);
+
+    expect(next).not.toHaveBeenCalled();
+    expect(textMock).toHaveBeenCalledWith('Unauthorized', 401, {
+      'WWW-Authenticate': 'Basic realm="Moltbot"',
+    });
+  });
+
+  it('returns 401 with wrong credentials', async () => {
+    const { c, textMock } = createBasicAuthContext({
+      env: { BASIC_AUTH_USERNAME: 'admin', BASIC_AUTH_PASSWORD: 'secret' },
+      authorization: `Basic ${btoa('admin:wrong')}`,
+    });
+    const middleware = createBasicAuthMiddleware();
+    const next = vi.fn();
+
+    await middleware(c, next);
+
+    expect(next).not.toHaveBeenCalled();
+    expect(textMock).toHaveBeenCalledWith('Unauthorized', 401, {
+      'WWW-Authenticate': 'Basic realm="Moltbot"',
+    });
+  });
+
+  it('allows access with correct credentials', async () => {
+    const { c } = createBasicAuthContext({
+      env: { BASIC_AUTH_USERNAME: 'admin', BASIC_AUTH_PASSWORD: 'secret' },
+      authorization: `Basic ${btoa('admin:secret')}`,
+    });
+    const middleware = createBasicAuthMiddleware();
+    const next = vi.fn();
+
+    await middleware(c, next);
+
+    expect(next).toHaveBeenCalled();
+  });
+
+  it('handles password containing colons', async () => {
+    const { c } = createBasicAuthContext({
+      env: { BASIC_AUTH_USERNAME: 'user', BASIC_AUTH_PASSWORD: 'pass:with:colons' },
+      authorization: `Basic ${btoa('user:pass:with:colons')}`,
+    });
+    const middleware = createBasicAuthMiddleware();
+    const next = vi.fn();
+
+    await middleware(c, next);
+
+    expect(next).toHaveBeenCalled();
   });
 });
