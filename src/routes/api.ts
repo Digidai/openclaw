@@ -32,7 +32,7 @@ adminApi.get('/devices', async (c) => {
     await ensureMoltbotGateway(sandbox, c.env);
 
     // Run OpenClaw CLI to list devices
-    // Must specify --url and --token (OpenClaw v2026.2.3 requires explicit credentials with --url)
+    // Must specify --url and --token (OpenClaw v2026.2.21-2 requires explicit credentials with --url)
     const token = c.env.MOLTBOT_GATEWAY_TOKEN;
     const tokenArg = token ? ` --token ${token}` : '';
     const proc = await sandbox.startProcess(
