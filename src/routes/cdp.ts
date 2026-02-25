@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import type { AppEnv, MoltbotEnv } from '../types';
-import puppeteer, { type Browser, type Page } from '@cloudflare/puppeteer';
+import type { Browser, Page } from '@cloudflare/puppeteer';
 
 /**
  * CDP (Chrome DevTools Protocol) WebSocket shim
@@ -22,6 +22,18 @@ import puppeteer, { type Browser, type Page } from '@cloudflare/puppeteer';
  * - Emulation: setDeviceMetricsOverride, setUserAgentOverride
  */
 const cdp = new Hono<AppEnv>();
+
+type PuppeteerModule = typeof import('@cloudflare/puppeteer');
+type PuppeteerInstance = PuppeteerModule['default'];
+
+let puppeteerModulePromise: Promise<PuppeteerInstance> | null = null;
+
+async function getPuppeteer(): Promise<PuppeteerInstance> {
+  if (!puppeteerModulePromise) {
+    puppeteerModulePromise = import('@cloudflare/puppeteer').then((mod) => mod.default);
+  }
+  return puppeteerModulePromise;
+}
 
 /**
  * CDP Message types
@@ -367,6 +379,7 @@ async function initCDPSession(ws: WebSocket, env: MoltbotEnv): Promise<void> {
 
   try {
     // Launch browser
+    const puppeteer = await getPuppeteer();
     // eslint-disable-next-line import/no-named-as-default-member -- puppeteer.launch() is the standard API
     const browser = await puppeteer.launch(env.BROWSER!);
     const page = await browser.newPage();
